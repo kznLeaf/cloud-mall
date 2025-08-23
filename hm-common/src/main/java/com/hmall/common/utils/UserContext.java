@@ -4,7 +4,7 @@ public class UserContext {
     private static final ThreadLocal<Long> tl = new ThreadLocal<>();
 
     /**
-     * 保存当前登录用户信息到ThreadLocal
+     * 保存当前登录用户信息到 ThreadLocal
      * @param userId 用户id
      */
     public static void setUser(Long userId) {
