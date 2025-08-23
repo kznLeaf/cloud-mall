@@ -17,6 +17,8 @@ import java.time.LocalDateTime;
  *
  * @author 虎哥
  * @since 2023-05-05
+ *
+ * 持久化对象，属于数据库实体类，描述数据库表结构，负责ORM映射。
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

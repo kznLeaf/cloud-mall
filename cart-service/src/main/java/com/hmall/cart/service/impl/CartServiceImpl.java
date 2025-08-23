@@ -3,7 +3,9 @@ package com.hmall.cart.service.impl;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmall.cart.client.ItemClient;
 import com.hmall.cart.domain.dto.CartFormDTO;
+import com.hmall.cart.domain.dto.ItemDTO;
 import com.hmall.cart.domain.po.Cart;
 import com.hmall.cart.domain.vo.CartVO;
 import com.hmall.cart.mapper.CartMapper;
@@ -17,6 +19,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * <p>
@@ -30,7 +36,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CartServiceImpl extends ServiceImpl<CartMapper, Cart> implements ICartService {
 
-//    private final IItemService itemService;  TODO
+    //    private final IItemService itemService;  TODO
+    private final ItemClient itemClient;
 
     @Override
     public void addItem2Cart(CartFormDTO cartFormDTO) {
@@ -38,7 +45,7 @@ public class CartServiceImpl extends ServiceImpl<CartMapper, Cart> implements IC
         Long userId = UserContext.getUser();
 
         // 2.判断是否已经存在
-        if(checkItemExists(cartFormDTO.getItemId(), userId)){
+        if (checkItemExists(cartFormDTO.getItemId(), userId)) {
             // 2.1.存在，则更新数量
             baseMapper.updateNum(cartFormDTO.getItemId(), userId);
             return;
@@ -63,7 +70,7 @@ public class CartServiceImpl extends ServiceImpl<CartMapper, Cart> implements IC
             return CollUtils.emptyList();
         }
 
-        // 2.转换VO
+        // 2.转换VO，vos是可以用于查询的对象
         List<CartVO> vos = BeanUtils.copyList(carts, CartVO.class);
 
         // 3.处理VO中的商品信息
@@ -74,25 +81,27 @@ public class CartServiceImpl extends ServiceImpl<CartMapper, Cart> implements IC
     }
 
     private void handleCartItems(List<CartVO> vos) {
-/*        // 1.获取商品id
+        // 1.获取商品id  从传入的 购物车列表 vos 中，把所有的 itemId 提取出来，放进一个 Set（去重）
         Set<Long> itemIds = vos.stream().map(CartVO::getItemId).collect(Collectors.toSet());
-        // 2.查询商品
-        List<ItemDTO> items = itemService.queryItemByIds(itemIds);
+        // 2.远程查询商品的当前详细信息
+        List<ItemDTO> items = itemClient.queryItemByIds(itemIds);
         if (CollUtils.isEmpty(items)) {
             return;
         }
-        // 3.转为 id 到 item的map
+        // 3. 把查询到的 ItemDTO 列表转换成 Map，key = 商品ID，value = 商品信息。
+        // 这样后面就能根据 itemId 直接 O(1) 找到商品信息。
         Map<Long, ItemDTO> itemMap = items.stream().collect(Collectors.toMap(ItemDTO::getId, Function.identity()));
-        // 4.写入vo
+        // 4.修改 vos ，用于显示商品的降价情况等
         for (CartVO v : vos) {
             ItemDTO item = itemMap.get(v.getItemId());
             if (item == null) {
                 continue;
             }
+            // 设置 vo 新增的三个字段：
             v.setNewPrice(item.getPrice());
             v.setStatus(item.getStatus());
             v.setStock(item.getStock());
-        }*/
+        }
     }
 
     @Override

@@ -13,6 +13,10 @@ import java.time.LocalDateTime;
  *
  * @author 虎哥
  * @since 2023-05-05
+ *
+ * View Object，前端拿到的永远是 VO。
+ *
+ * 相比于Cart实体类，去掉了用户ID和该字段的更新时间，增加了商品的最新价格、商品状态、最新库存量
  */
 @Data
 @ApiModel(description = "购物车VO实体")
