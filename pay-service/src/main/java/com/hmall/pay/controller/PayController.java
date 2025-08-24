@@ -1,15 +1,19 @@
-package com.hmall.controller;
+package com.hmall.pay.controller;
 
 import com.hmall.common.exception.BizIllegalException;
-import com.hmall.domain.dto.PayApplyDTO;
-import com.hmall.domain.dto.PayOrderFormDTO;
-import com.hmall.enums.PayType;
-import com.hmall.service.IPayOrderService;
+import com.hmall.common.utils.BeanUtils;
+import com.hmall.pay.domain.dto.PayApplyDTO;
+import com.hmall.pay.domain.dto.PayOrderFormDTO;
+import com.hmall.pay.domain.vo.PayOrderVO;
+import com.hmall.pay.enums.PayType;
+import com.hmall.pay.service.IPayOrderService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiImplicitParam;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Api(tags = "支付相关接口")
 @RestController
@@ -19,12 +23,18 @@ public class PayController {
 
     private final IPayOrderService payOrderService;
 
+    @ApiOperation("查询订单")
+    @GetMapping
+    public List<PayOrderVO> queryPayOrders() {
+        return BeanUtils.copyList(payOrderService.list(), PayOrderVO.class);
+    }
+
     /*业务订单记录购买了什么商品，支付订单记录某个商品的支付情况*/
     @ApiOperation("生成支付单")
     @PostMapping
-    public String applyPayOrder(@RequestBody PayApplyDTO applyDTO){
+    public String applyPayOrder(@RequestBody PayApplyDTO applyDTO) {
         // pay-order
-        if(!PayType.BALANCE.equalsValue(applyDTO.getPayType())){
+        if (!PayType.BALANCE.equalsValue(applyDTO.getPayType())) {
             // 目前只支持余额支付
             throw new BizIllegalException("抱歉，目前只支持余额支付");
         }
@@ -34,7 +44,7 @@ public class PayController {
     @ApiOperation("尝试基于用户余额支付")
     @ApiImplicitParam(value = "支付单id", name = "id")
     @PostMapping("{id}")
-    public void tryPayOrderByBalance(@PathVariable("id") Long id, @RequestBody PayOrderFormDTO payOrderFormDTO){
+    public void tryPayOrderByBalance(@PathVariable("id") Long id, @RequestBody PayOrderFormDTO payOrderFormDTO) {
         payOrderFormDTO.setId(id);
         payOrderService.tryPayOrderByBalance(payOrderFormDTO);
     }
