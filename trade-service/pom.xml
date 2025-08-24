@@ -9,7 +9,7 @@
         <version>1.0.0</version>
     </parent>
 
-    <artifactId>user-service</artifactId>
+    <artifactId>trade-service</artifactId>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
@@ -69,5 +69,6 @@
             </plugin>
         </plugins>
     </build>
+
 
 </project>
