@@ -56,10 +56,13 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             return response.setComplete(); // 终止，不再执行后面的拦截器
         }
 
-        System.out.println("userId = " + userID);
-
+        String userInfo = userID.toString();
+        ServerWebExchange ss = exchange.mutate()
+                // 加上名为 user-info 的请求头
+                .request(builder -> builder.header("user-info", userInfo))
+                .build();
         // 放行
-        return chain.filter(exchange);
+        return chain.filter(ss);
     }
 
     private boolean isExcule(String string) {
