@@ -48,6 +48,9 @@ hm:
     alias: hmall
     password: hmall123
     tokenTTL: 30m
-feign:
-  okhttp:
-    enabled: true
+#  auth:
+#    excludePaths:
+#      - /search/**
+#      - /users/login
+#      - /items/**
+#      - /hi
