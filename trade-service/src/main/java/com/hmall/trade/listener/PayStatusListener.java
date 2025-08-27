@@ -1,5 +1,6 @@
 package com.hmall.trade.listener;
 
+import com.hmall.trade.domain.po.Order;
 import com.hmall.trade.service.IOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.Exchange;
@@ -25,6 +26,14 @@ public class PayStatusListener {
             key = "pay.success"
     ))
     public void listenPaySuccess(Long orderId) {
+        // 查询老订单
+        Order orderServiceById = orderService.getById(orderId);
+        // 判断订单状态
+        if (orderServiceById == null || orderServiceById.getStatus() != 1) {
+            // 不是未支付
+            return;
+        }
+        // 在订单未支付的状态下，标记订单状态为已支付
         orderService.markOrderPaySuccess(orderId);
     }
 }
