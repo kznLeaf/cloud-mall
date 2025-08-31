@@ -13,6 +13,8 @@ import com.hmall.item.service.IItemService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,9 +23,20 @@ import java.util.List;
 @RestController
 @RequestMapping("/items")
 @RequiredArgsConstructor
+@Slf4j
 public class ItemController {
 
     private final IItemService itemService;
+
+    private final RabbitTemplate rabbitTemplate;
+
+    private static final String ES_EXCHANGE = "item.direct";
+
+    private static final String ADD_ITEM = "item.add";
+
+    private static final String UPDATE_ITEM = "item.update";
+
+    private static final String DELETE_ITEM = "item.delete";
 
     @ApiOperation("分页查询商品")
     @GetMapping("/page")
@@ -46,11 +59,19 @@ public class ItemController {
         return BeanUtils.copyBean(itemService.getById(id), ItemDTO.class);
     }
 
-    @ApiOperation("新增商品")
+/*    @ApiOperation("新增商品")
     @PostMapping
     public void saveItem(@RequestBody ItemDTO item) {
         // 新增
         itemService.save(BeanUtils.copyBean(item, Item.class));
+    }*/
+
+    @ApiOperation("新增商品")
+    @PostMapping
+    public void saveItem(@RequestBody ItemDTO itemDTO) {
+        Item item = BeanUtils.copyBean(itemDTO, Item.class);
+        itemService.save(item);
+        rabbitTemplate.convertAndSend(ES_EXCHANGE, ADD_ITEM, item.getId());
     }
 
     @ApiOperation("更新商品状态")
@@ -64,17 +85,22 @@ public class ItemController {
 
     @ApiOperation("更新商品")
     @PutMapping
-    public void updateItem(@RequestBody ItemDTO item) {
+    public void updateItem(@RequestBody ItemDTO itemDTO) {
         // 不允许修改商品状态，所以强制设置为null，更新时，就会忽略该字段
-        item.setStatus(null);
+        itemDTO.setStatus(null);
         // 更新
-        itemService.updateById(BeanUtils.copyBean(item, Item.class));
+        Item item = BeanUtils.copyBean(itemDTO, Item.class);
+        itemService.updateById(item);
+        // 发送消息
+        rabbitTemplate.convertAndSend(ES_EXCHANGE, UPDATE_ITEM, item.getId());
     }
 
     @ApiOperation("根据id删除商品")
     @DeleteMapping("{id}")
     public void deleteItemById(@PathVariable("id") Long id) {
         itemService.removeById(id);
+        log.info("正在向删除队列发送消息：id:{}", id);
+        rabbitTemplate.convertAndSend(ES_EXCHANGE, DELETE_ITEM, id);
     }
 
     @ApiOperation("批量扣减库存")

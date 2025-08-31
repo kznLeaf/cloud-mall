@@ -22,14 +22,20 @@ public class ItemClientFallbackFactory implements FallbackFactory<ItemClient> {
         return new ItemClient() {
             @Override
             public List<ItemDTO> queryItemByIds(Collection<Long> ids) {
-                log.error("查询失败" + ids);
+                log.error("Fallback: 查询失败" + ids);
                 return Collections.emptyList();
             }
 
             @Override
             public void deductStock(List<OrderDetailDTO> items) {
-                log.error("扣减库存失败");
+                log.error("Fallback: 扣减库存失败");
                 throw new RuntimeException();
+            }
+
+            @Override
+            public ItemDTO queryItemById(Long id) {
+                log.error("Fallback: queryItemById失败");
+                return null;
             }
         };
     }

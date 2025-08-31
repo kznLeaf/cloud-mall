@@ -1,15 +1,10 @@
 server:
-  port: 8081
+  port: 8090
 spring:
   application:
-    name: item-service
+    name: search-service
   profiles:
     active: dev
-  datasource:
-    url: jdbc:mysql://${hm.db.host}:3306/hm-item?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: ${hm.db.pw}
   cloud:
     nacos:
       server-addr: 192.168.199.131
@@ -22,6 +17,11 @@ spring:
     listener:
       simple:
         prefetch: 1
+  datasource:
+    url: jdbc:mysql://${hm.db.host}:3306/hm-item?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: ${hm.db.pw}
 mybatis-plus:
   configuration:
     default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
@@ -29,6 +29,7 @@ mybatis-plus:
     db-config:
       update-strategy: not_null
       id-type: auto
+
 logging:
   level:
     com.hmall: debug
@@ -39,8 +40,8 @@ logging:
 knife4j:
   enable: true
   openapi:
-    title: 黑马商城商品管理接口文档
-    description: "黑马商城商品管理接口文档"
+    title: 黑马商城搜索文档
+    description: "黑马商城搜索文档"
     email: zhanghuyi@itcast.cn
     concat: 虎哥
     url: https://www.itcast.cn
@@ -50,4 +51,5 @@ knife4j:
         group-name: default
         api-rule: package
         api-rule-resources:
-          - com.hmall.item.controller
+          - com.hmall.search.controller
+
