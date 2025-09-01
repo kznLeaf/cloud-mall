@@ -18,8 +18,12 @@ import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.lucene.search.function.CombineFunction;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder;
+import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilder;
+import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
@@ -29,11 +33,13 @@ import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import javax.management.Query;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 @Api(tags = "搜索相关接口")
 @RestController
@@ -62,7 +68,7 @@ public class SearchController {
 
     @ApiOperation("搜索商品list")
     @GetMapping("/list")
-    public PageDTO<ItemDTO> search(@RequestBody ItemPageQuery query) throws IOException {
+    public PageDTO<ItemDTO> search(ItemPageQuery query) throws IOException {
         SearchRequest searchRequest = new SearchRequest("items");
         // 组织DSL参数
         BoolQueryBuilder bool = QueryBuilders.boolQuery();
@@ -86,20 +92,42 @@ public class SearchController {
         if (query.getMinPrice() != null) {
             bool.filter(QueryBuilders.rangeQuery("price").gte(query.getMinPrice()));
         }
-
-        searchRequest.source().query(bool);
+//        下面的查询已经包含在后面的算分查询，作为主查询使用，所以这里没必要写了
+//        searchRequest.source().query(bool);
 
         // 分页
         Integer pageNo = query.getPageNo();
         Integer pageSize = query.getPageSize();
         searchRequest.source().from((pageNo - 1) * pageSize).size(pageSize);
 
+        // 广告优先，如果 isAD字段为1，那么加上100的权重
+        searchRequest.source().query(QueryBuilders.functionScoreQuery(bool,
+                new FunctionScoreQueryBuilder.FilterFunctionBuilder[]{
+                        new FunctionScoreQueryBuilder.FilterFunctionBuilder(
+                                QueryBuilders.termQuery("isAD", true),
+                                ScoreFunctionBuilders.weightFactorFunction(100)
+                        )
+                }).boostMode(CombineFunction.MULTIPLY));
+
+        // 广告优先，其次再按时间/用户指定排序
+
         // 按照`update_time`降序排序
         // 如果指定了排序的字段，就按照指定字段进行排序；否则默认按照更新时间进行排序
-        if (StringUtils.hasLength(query.getSortBy())) {
+/*        if (StringUtils.hasLength(query.getSortBy())) {
             searchRequest.source().sort(query.getSortBy(), query.getIsAsc() ? SortOrder.ASC : SortOrder.DESC);
         } else {
             searchRequest.source().sort("updateTime", query.getIsAsc() ? SortOrder.ASC : SortOrder.DESC);
+        }*/
+
+        // ⚠️ 这里不要直接覆盖掉 _score 排序，而是【二级排序】
+        if (StringUtils.hasLength(query.getSortBy())) {
+            searchRequest.source()
+                    .sort("_score", SortOrder.DESC)  // 先按广告优先
+                    .sort(query.getSortBy(), query.getIsAsc() ? SortOrder.ASC : SortOrder.DESC);
+        } else {
+            searchRequest.source()
+                    .sort("_score", SortOrder.DESC)  // 先按广告优先
+                    .sort("updateTime", query.getIsAsc() ? SortOrder.ASC : SortOrder.DESC);
         }
 
         // 发送请求
