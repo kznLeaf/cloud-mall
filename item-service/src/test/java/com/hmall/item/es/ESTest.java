@@ -63,6 +63,7 @@ public class ESTest {
 
         SearchHit[] hits1 = hits.getHits();
 
+
         for (SearchHit hit : hits1) {
             // 转换为 doc 对象
             ItemDTO bean = JSONUtil.toBean(hit.getSourceAsString(), ItemDTO.class);
@@ -102,7 +103,7 @@ public class ESTest {
 
         // 前端传来当前第几页和一页的大小
         int pageNo = 1;
-        int pageSize = 10;
+        int pageSize = 10; // 每一页的大小
         // (pageNo - 1)* pageSize
 
         SearchRequest searchRequest = new SearchRequest("items");

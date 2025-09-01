@@ -3,33 +3,47 @@ package com.hmall.search.controller;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.json.JSONUtil;
 import com.hmall.api.dto.ItemDTO;
+import com.hmall.common.domain.PageDTO;
 import com.hmall.search.domain.po.ItemDoc;
+import com.hmall.search.domain.query.ItemPageQuery;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.sort.SortOrder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @Api(tags = "搜索相关接口")
 @RestController
 @RequestMapping("/search")
 @RequiredArgsConstructor
+@Slf4j
 public class SearchController {
 
     private final RestHighLevelClient client =
             new RestHighLevelClient(RestClient.builder(HttpHost.create("http://192.168.199.131:9200")));
 
-    @ApiOperation("搜索商品")
+    @ApiOperation("根据id搜索商品")
     @GetMapping("/{id}")
     public ItemDTO search(@PathVariable("id") Long id) throws IOException {
         // 准备request
@@ -43,4 +57,88 @@ public class SearchController {
 
         return BeanUtil.copyProperties(itemDoc, ItemDTO.class);
     }
+
+    @ApiOperation("搜索商品list")
+    @GetMapping("/list")
+    public PageDTO<ItemDTO> search(ItemPageQuery query) throws IOException {
+        SearchRequest searchRequest = new SearchRequest("items");
+        // 组织DSL参数
+        BoolQueryBuilder bool = QueryBuilders.boolQuery();
+        // 根据条件拼接请求
+        if (StringUtils.hasLength(query.getKey())) {
+            // 关键字搜索
+            bool.must(QueryBuilders.matchQuery("name", query.getKey()));
+        }
+        if (StringUtils.hasLength(query.getCategory())) {
+            // 分类过滤
+            bool.filter(QueryBuilders.termQuery("category", query.getCategory()));
+        }
+        if (StringUtils.hasLength(query.getBrand())) {
+            // 品牌过滤
+            bool.filter(QueryBuilders.termQuery("brand", query.getBrand()));
+        }
+        if (query.getMaxPrice() != null) {
+            // 价格最大值
+            bool.filter(QueryBuilders.rangeQuery("price").lte(query.getMaxPrice()));
+        }
+        if (query.getMinPrice() != null) {
+            bool.filter(QueryBuilders.rangeQuery("price").gte(query.getMinPrice()));
+        }
+
+        searchRequest.source().query(bool);
+
+        // 分页
+        Integer pageNo = query.getPageNo();
+        Integer pageSize = query.getPageSize();
+        searchRequest.source().from((pageNo - 1) * pageSize).size(pageSize);
+
+        // 按照`update_time`降序排序
+        // 如果指定了排序的字段，就按照指定字段进行排序；否则默认按照更新时间进行排序
+        if (StringUtils.hasLength(query.getSortBy())) {
+            searchRequest.source().sort(query.getSortBy(), query.getIsAsc() ? SortOrder.ASC : SortOrder.DESC);
+        } else {
+            searchRequest.source().sort("updateTime", query.getIsAsc() ? SortOrder.ASC : SortOrder.DESC);
+        }
+
+        // 发送请求
+        SearchResponse response = client.search(searchRequest, RequestOptions.DEFAULT);
+
+        // 解析结果
+        return parseResponseResult(response, query, pageSize.longValue());
+    }
+
+    /**
+     * 转化结果的方法
+     *
+     * @param response es返回的响应
+     * @param query    前端传来的查询类，包含了各种查询参数
+     * @param pageSize 每一页的大小
+     * @return 封装好的页数据传输对象
+     */
+    private PageDTO<ItemDTO> parseResponseResult(SearchResponse response, ItemPageQuery query, Long pageSize) {
+        List<ItemDoc> itemDocList = new ArrayList<>();
+
+        SearchHits searchHits = response.getHits(); // 外层 hits
+
+        if (searchHits.getTotalHits() == null) return null;
+        // 与查询条件匹配的总记录数，后续分页是在查出来所有匹配记录的基础上进行的。
+        long total = searchHits.getTotalHits().value;
+
+        SearchHit[] hits = searchHits.getHits();
+
+        for (SearchHit hit : hits) {
+            String sourceAsString = hit.getSourceAsString();
+            ItemDoc doc = JSONUtil.toBean(sourceAsString, ItemDoc.class);
+            itemDocList.add(doc);
+        }
+        // 直接查出来的是ItemDoc类型的数据，但是接口要求返回ItemDTO类型的数据用于传输
+        List<ItemDTO> itemDTOs = BeanUtil.copyToList(itemDocList, ItemDTO.class);
+
+        // 计算总页数
+        long pages = (total + pageSize - 1) / pageSize;
+        log.debug("total: {}, pages: {}", total, pages);
+        // 传入参数：总记录数 总页数 包含【当前页】的所有记录的列表（按需查询，每次查出来一页）
+        return new PageDTO<>(total, pages, itemDTOs);
+    }
+
 }
