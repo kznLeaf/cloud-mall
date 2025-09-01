@@ -22,16 +22,18 @@ import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Api(tags = "搜索相关接口")
 @RestController
@@ -60,7 +62,7 @@ public class SearchController {
 
     @ApiOperation("搜索商品list")
     @GetMapping("/list")
-    public PageDTO<ItemDTO> search(ItemPageQuery query) throws IOException {
+    public PageDTO<ItemDTO> search(@RequestBody ItemPageQuery query) throws IOException {
         SearchRequest searchRequest = new SearchRequest("items");
         // 组织DSL参数
         BoolQueryBuilder bool = QueryBuilders.boolQuery();
@@ -139,6 +141,64 @@ public class SearchController {
         log.debug("total: {}, pages: {}", total, pages);
         // 传入参数：总记录数 总页数 包含【当前页】的所有记录的列表（按需查询，每次查出来一页）
         return new PageDTO<>(total, pages, itemDTOs);
+    }
+
+    /**
+     * 统计查询结果的品牌和分类信息，先做一次 match 全文检索，再对品牌和类别进行聚合
+     *
+     * @param query 前端传来的参数
+     * @return 响应
+     */
+    @ApiOperation("聚合查询商品")
+    @PostMapping("/filters")
+    public Map<String, List<String>> AggQuery(@RequestBody ItemPageQuery query) {
+        SearchRequest request = new SearchRequest("items");
+        // 准备请求参数
+        // 先匹配关键词
+        request.source().query(QueryBuilders.matchQuery("name", query.getKey()));
+        request.source().size(0);
+
+        // 聚合条件，一共有两个
+        String brandAgg = "brand_agg";
+        String categoryAgg = "category_agg";
+        request.source().aggregation(
+                AggregationBuilders.terms(brandAgg).field("brand").size(10)
+        );          // 保留前 10个品牌
+        request.source().aggregation(
+                AggregationBuilders.terms(categoryAgg).field("category").size(10)
+        );
+        // 发送请求
+        SearchResponse response = null;
+        try {
+            response = client.search(request, RequestOptions.DEFAULT);
+        } catch (IOException e) {
+            log.error("聚合查询发送请求失败！");
+            throw new RuntimeException(e);
+        }
+
+        // 解析结果
+        Aggregations aggregations = response.getAggregations();
+        Terms brandTerms = aggregations.get("brand_agg");
+        List<? extends Terms.Bucket> brandBuckets = brandTerms.getBuckets();
+        Terms categoryTerms = aggregations.get("category_agg");
+        List<? extends Terms.Bucket> categoryBuckets = categoryTerms.getBuckets();
+        // 遍历获取每一个bucket
+        List<String> brandList = new ArrayList<>();
+        List<String> categoryList = new ArrayList<>();
+        for (Terms.Bucket brandBucket : brandBuckets) {
+            brandList.add(brandBucket.getKeyAsString());
+        }
+        for (Terms.Bucket categoryBucket : categoryBuckets) {
+            categoryList.add(categoryBucket.getKeyAsString());
+        }
+        // 储存结果到map中
+        Map<String, List<String>> map = new HashMap<>();
+        map.put("brand", brandList);
+        map.put("category", categoryList);
+
+        log.debug("brandList: {}", brandList);
+        log.debug("categoryList: {}", categoryList);
+        return map;
     }
 
 }
